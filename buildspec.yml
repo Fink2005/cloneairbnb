@@ -1,0 +1,53 @@
+version: 0.2
+
+env:
+  variables:
+    DEBUG: "true"
+
+phases:
+  pre_build:
+    commands:
+      - echo Connecting to Amazon ECR...
+      - aws --version
+      # Đăng nhập vào Amazon ECR
+      - aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 977098996062.dkr.ecr.ap-southeast-1.amazonaws.com
+      # Đăng nhập Docker Hub
+      - echo Logging into Docker Hub...
+      - docker login --username "thanhhuy.dohuynh@gmail.com" --password "@Thanhhuy1995"
+      # Khai báo biến REPOSITORY_URI
+      - REPOSITORY_URI=977098996062.dkr.ecr.ap-southeast-1.amazonaws.com/airbnb-app-repo
+      # Lấy commit hash từ mã nguồn
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      # Tạo image tag từ build ID
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
+      
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker login
+      # Build Docker image
+      # - docker build --platform linux/amd64 -t $REPOSITORY_URI:latest 
+      # - docker build -t $REPOSITORY_URI:latest .
+      # - docker build -t airbnb-app-repo .
+      # - docker build --build-arg NEXT_PUBLIC_API_ENDPOINT=https://airbnbnew.cybersoft.edu.vn -t $REPOSITORY_URI:latest .
+      - docker build --build-arg NEXT_PUBLIC_API_ENDPOINT=https://airbnbnew.cybersoft.edu.vn --build-arg NEXT_PUBLIC_URL=http://localhost:8080 -t $REPOSITORY_URI:latest .
+      # Tag image cho phiên bản cụ thể
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+      # - docker tag airbnb-app-repo:latest 977098996062.dkr.ecr.ap-southeast-1.amazonaws.com/airbnb-app-repo:latest
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
+      # Push image lên ECR
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      # - docker push 977098996062.dkr.ecr.ap-southeast-1.amazonaws.com/airbnb-app-repo:latest
+      - echo Writing image definitions file...
+      # Tạo file image definition để sử dụng với ECS
+      - printf '[{"name":"airbnb-app-repo","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+artifacts:
+  files: imagedefinitions.json
+
+
